@@ -1,0 +1,99 @@
+/**
+ * Renders a price chart PNG for Discord embeds via QuickChart.
+ */
+async function renderPriceChart({
+  symbol,
+  history,
+  up = true,
+  rangeLabel = '6 months',
+} = {}) {
+  if (!history?.length) {
+    throw new Error('No history available to render chart.');
+  }
+
+  // Keep the chart readable — last ~130 trading days (~6 months)
+  const points = history.slice(-130);
+  const labels = points.map((p) => {
+    const d = new Date(p.date);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  });
+  const prices = points.map((p) => Number(p.close));
+
+  const line = up ? 'rgb(74, 222, 128)' : 'rgb(251, 113, 133)';
+  const fill = up ? 'rgba(74, 222, 128, 0.18)' : 'rgba(251, 113, 133, 0.18)';
+
+  const chart = {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: symbol,
+          data: prices,
+          borderColor: line,
+          backgroundColor: fill,
+          borderWidth: 2.5,
+          fill: true,
+          tension: 0.3,
+          pointRadius: 0,
+          pointHoverRadius: 3,
+        },
+      ],
+    },
+    options: {
+      layout: { padding: { top: 8, right: 12, bottom: 4, left: 4 } },
+      plugins: {
+        legend: { display: false },
+        title: {
+          display: true,
+          text: `${symbol} · ${rangeLabel}`,
+          color: '#cbd5e1',
+          font: { size: 15, weight: '600' },
+          padding: { bottom: 12 },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            maxTicksLimit: 7,
+            color: '#94a3b8',
+            font: { size: 10 },
+            maxRotation: 0,
+          },
+          grid: { color: 'rgba(148, 163, 184, 0.12)', drawBorder: false },
+        },
+        y: {
+          ticks: {
+            color: '#94a3b8',
+            font: { size: 10 },
+            callback: (v) => Number(v).toFixed(2),
+          },
+          grid: { color: 'rgba(148, 163, 184, 0.12)', drawBorder: false },
+        },
+      },
+    },
+  };
+
+  const res = await fetch('https://quickchart.io/chart', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      width: 860,
+      height: 380,
+      devicePixelRatio: 2,
+      backgroundColor: '#0f172a',
+      format: 'png',
+      chart,
+    }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Chart render failed (${res.status})`);
+  }
+
+  return Buffer.from(await res.arrayBuffer());
+}
+
+module.exports = {
+  renderPriceChart,
+};

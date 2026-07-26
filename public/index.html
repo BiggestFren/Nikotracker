@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nikotracker · Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="bg"></div>
+  <header class="top">
+    <div class="brand">
+      <span class="mark">NT</span>
+      <div>
+        <h1>Nikotracker</h1>
+        <p>FTGFF Discord stock reports</p>
+      </div>
+    </div>
+    <div class="status-pill" id="botStatus">
+      <span class="dot"></span>
+      <span id="botStatusText">Connecting…</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Report settings</h2>
+        <p>Choose the channel, cadence, and which metrics appear in the Discord embed.</p>
+      </div>
+
+      <form id="settingsForm">
+        <div class="grid two">
+          <label class="field">
+            <span>Discord channel</span>
+            <select id="channelId" name="channelId" required>
+              <option value="">Loading channels…</option>
+            </select>
+            <small>Updates are posted only to this channel.</small>
+          </label>
+
+          <label class="field">
+            <span>Report every</span>
+            <div class="inline">
+              <input id="intervalHours" name="intervalHours" type="number" min="0.25" max="168" step="0.25" value="1" />
+              <span class="suffix">hours</span>
+            </div>
+            <small>Use 0.25 for every 15 minutes, 1 for hourly, 24 for daily.</small>
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label class="field">
+            <span>Ticker symbol</span>
+            <input id="symbol" name="symbol" type="text" value="FTGFF" />
+          </label>
+          <label class="field">
+            <span>Company name</span>
+            <input id="companyName" name="companyName" type="text" value="Firan Technology Group Corp" />
+          </label>
+        </div>
+
+        <div class="grid two">
+          <label class="field">
+            <span>Exchange label</span>
+            <input id="exchange" name="exchange" type="text" value="OTCMKTS" />
+          </label>
+          <label class="field">
+            <span>Embed accent color</span>
+            <input id="embedColor" name="embedColor" type="color" value="#2b6cb0" />
+          </label>
+        </div>
+
+        <div class="toggles">
+          <label class="switch">
+            <input type="checkbox" id="enabled" checked />
+            <span>Enable automatic reports</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="includeChart" checked />
+            <span>Attach price chart image</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="includeChartHint" checked />
+            <span>Include Yahoo Finance link</span>
+          </label>
+        </div>
+
+        <fieldset class="metrics">
+          <legend>Embed fields</legend>
+          <div class="metric-grid" id="fieldToggles"></div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit" class="btn primary" id="saveBtn">Save settings</button>
+          <button type="button" class="btn" id="reportNowBtn">Send report now</button>
+          <button type="button" class="btn ghost" id="refreshBtn">Refresh</button>
+        </div>
+        <p class="toast" id="toast" hidden></p>
+      </form>
+    </section>
+
+    <aside class="side">
+      <section class="card">
+        <h3>Live preview</h3>
+        <p class="muted">Pulled from Yahoo Finance for the configured ticker.</p>
+        <div id="preview" class="preview">
+          <div class="preview-loading">Fetching quote…</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Scheduler</h3>
+        <dl class="meta" id="schedulerMeta">
+          <div><dt>Status</dt><dd>—</dd></div>
+        </dl>
+      </section>
+
+      <section class="card invite-card">
+        <h3>Invite bot</h3>
+        <p class="muted">Add Nikotracker to a Discord server. It needs permission to send embeds and attach the chart image.</p>
+        <div class="invite-actions">
+          <a class="btn primary" id="inviteOpenBtn" href="#" target="_blank" rel="noopener">Open invite link</a>
+          <button type="button" class="btn" id="inviteCopyBtn">Copy link</button>
+        </div>
+        <p class="invite-url" id="inviteUrlText">Loading invite…</p>
+        <ul class="perm-list">
+          <li>View Channel</li>
+          <li>Send Messages</li>
+          <li>Embed Links</li>
+          <li>Attach Files</li>
+        </ul>
+      </section>
+
+      <section class="card tip">
+        <h3>After inviting</h3>
+        <p>Refresh the channel list, pick the target channel, save, then hit <strong>Send report now</strong>.</p>
+      </section>
+    </aside>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
