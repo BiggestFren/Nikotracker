@@ -143,6 +143,8 @@ async function fetchQuote(symbol = 'FTGFF', options = {}) {
     week52Low: quote.fiftyTwoWeekLow ?? null,
     dividend: quote.dividendRate ?? quote.trailingAnnualDividendRate ?? null,
     marketState: quote.marketState || 'UNKNOWN',
+    regularMarketTime: quote.regularMarketTime || null,
+    quoteSourceName: quote.quoteSourceName || null,
     postMarketPrice: quote.postMarketPrice ?? null,
     postMarketChange: quote.postMarketChange ?? null,
     postMarketChangePercent: quote.postMarketChangePercent ?? null,

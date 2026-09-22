@@ -13,7 +13,9 @@ async function renderPriceChart({
 
   // Keep the chart readable — last ~130 trading days (~6 months)
   const points = history.slice(-130);
-  const labels = points.map((p) => {
+  const labelIndexes = new Set([0, 1, 2, 3].map((step) => Math.round((points.length - 1) * step / 3)));
+  const labels = points.map((p, index) => {
+    if (!labelIndexes.has(index)) return '';
     const d = new Date(p.date);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   });
@@ -34,41 +36,43 @@ async function renderPriceChart({
           backgroundColor: fill,
           borderWidth: 2.5,
           fill: true,
-          tension: 0.3,
+          tension: 0.1,
           pointRadius: 0,
           pointHoverRadius: 3,
         },
       ],
     },
     options: {
-      layout: { padding: { top: 8, right: 12, bottom: 4, left: 4 } },
+      layout: { padding: { top: 10, right: 18, bottom: 4, left: 8 } },
       plugins: {
         legend: { display: false },
         title: {
           display: true,
-          text: `${symbol} · ${rangeLabel}`,
+          text: `${symbol} · ${rangeLabel} trend`,
           color: '#cbd5e1',
-          font: { size: 15, weight: '600' },
+          font: { size: 20, weight: '600' },
           padding: { bottom: 12 },
         },
       },
       scales: {
         x: {
           ticks: {
-            maxTicksLimit: 7,
+            autoSkip: false,
             color: '#94a3b8',
-            font: { size: 10 },
+            font: { size: 14 },
             maxRotation: 0,
           },
-          grid: { color: 'rgba(148, 163, 184, 0.12)', drawBorder: false },
+          grid: { display: false },
+          border: { display: false },
         },
         y: {
           ticks: {
             color: '#94a3b8',
-            font: { size: 10 },
-            callback: (v) => Number(v).toFixed(2),
+            font: { size: 14 },
+            maxTicksLimit: 4,
           },
-          grid: { color: 'rgba(148, 163, 184, 0.12)', drawBorder: false },
+          grid: { color: 'rgba(148, 163, 184, 0.1)' },
+          border: { display: false },
         },
       },
     },
@@ -78,8 +82,9 @@ async function renderPriceChart({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      width: 860,
-      height: 380,
+      version: '4',
+      width: 640,
+      height: 260,
       devicePixelRatio: 2,
       backgroundColor: '#0f172a',
       format: 'png',

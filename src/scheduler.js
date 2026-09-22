@@ -1,52 +1,65 @@
 const { loadConfig } = require('./config');
-const { sendStockReport } = require('./bot');
+const { sendStockReport, sendMarketCloseMessage } = require('./bot');
+const { easternDate, duePosts, nextOpen, nextPost, marketStatus } = require('./market');
 
 let timer = null;
+let tickInFlight = false;
 let lastTickAt = null;
 let lastError = null;
-let currentMs = null;
 
-function hoursToMs(hours) {
-  const h = Math.max(0.25, Number(hours) || 1);
-  return Math.round(h * 60 * 60 * 1000);
+function completedToday(config, now) {
+  return config.scheduledSession === easternDate(now) ? config.completedSlots || [] : [];
+}
+
+async function tick(onReport) {
+  if (tickInFlight) return;
+  tickInFlight = true;
+  const now = new Date();
+  lastTickAt = now.toISOString();
+  try {
+    const config = loadConfig();
+    if (!config.enabled || !config.channelId) return;
+    const sessionDate = easternDate(now);
+    for (const post of duePosts(now, completedToday(config, now))) {
+      const current = loadConfig();
+      if (!current.enabled || !current.channelId) break;
+      if (completedToday(current, now).includes(post.id)) continue;
+
+      let result;
+      if (post.id === 'close-message') {
+        if (!completedToday(current, now).includes('close-report')) continue;
+        result = await sendMarketCloseMessage({ sessionDate, nextOpenAt: nextOpen(now) });
+      } else {
+        result = await sendStockReport({
+          kind: post.id === 'close-report' ? 'close' : 'regular',
+          sessionDate,
+          slot: post.id,
+        });
+      }
+      if (result?.ok) lastError = null;
+      else if (result?.reason) lastError = result.reason;
+      if (onReport) onReport(null, result);
+    }
+  } catch (err) {
+    lastError = err.message || String(err);
+    console.error('[scheduler] post failed:', lastError);
+    if (onReport) onReport(err, null);
+  } finally {
+    tickInFlight = false;
+  }
 }
 
 function stopScheduler() {
-  if (timer) {
-    clearInterval(timer);
-    timer = null;
-  }
-  currentMs = null;
+  if (timer) clearInterval(timer);
+  timer = null;
 }
 
 function startScheduler(onReport) {
   stopScheduler();
-  const config = loadConfig();
-  const ms = hoursToMs(config.intervalHours);
-  currentMs = ms;
-
-  timer = setInterval(async () => {
-    lastTickAt = new Date().toISOString();
-    try {
-      const result = await sendStockReport();
-      lastError = null;
-      if (onReport) onReport(null, result);
-    } catch (err) {
-      lastError = err.message || String(err);
-      console.error('[scheduler] report failed:', lastError);
-      if (onReport) onReport(err, null);
-    }
-  }, ms);
-
-  // Avoid the timer keeping the process stuck in weird states on Windows
-  if (typeof timer.unref === 'function') {
-    // Keep process alive via Discord + Express; unref not wanted here
-  }
-
-  console.log(
-    `[scheduler] reporting every ${config.intervalHours}h (${Math.round(ms / 60000)} min)`
-  );
-  return { intervalHours: config.intervalHours, intervalMs: ms };
+  timer = setInterval(() => tick(onReport), 30 * 1000);
+  void tick(onReport);
+  console.log('[scheduler] 4 reports per U.S. trading day, plus close report and signoff');
+  return getSchedulerStatus();
 }
 
 function restartScheduler(onReport) {
@@ -55,21 +68,21 @@ function restartScheduler(onReport) {
 
 function getSchedulerStatus() {
   const config = loadConfig();
+  const now = new Date();
+  const completed = completedToday(config, now);
+  const due = duePosts(now, completed);
   return {
     running: Boolean(timer),
-    intervalHours: config.intervalHours,
-    intervalMs: currentMs ?? hoursToMs(config.intervalHours),
     enabled: config.enabled,
+    marketStatus: marketStatus(now),
+    reportsPerSession: 4,
+    nextPostAt: config.enabled && config.channelId
+      ? (due[0]?.at || nextPost(now, completed)).toISOString()
+      : null,
     lastTickAt,
     lastError,
     lastReportAt: config.lastReportAt,
   };
 }
 
-module.exports = {
-  startScheduler,
-  stopScheduler,
-  restartScheduler,
-  getSchedulerStatus,
-  hoursToMs,
-};
+module.exports = { startScheduler, stopScheduler, restartScheduler, getSchedulerStatus };

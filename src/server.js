@@ -52,7 +52,6 @@ function createServer({ onConfigChange } = {}) {
           enabled: config.enabled,
           channelId: config.channelId,
           symbol: config.symbol,
-          intervalHours: config.intervalHours,
           lastReportAt: config.lastReportAt,
         },
       });
@@ -71,20 +70,12 @@ function createServer({ onConfigChange } = {}) {
   app.put('/api/config', (req, res) => {
     try {
       const body = req.body || {};
-      const intervalHours = Number(body.intervalHours);
-      if (!Number.isFinite(intervalHours) || intervalHours < 0.25 || intervalHours > 168) {
-        return res.status(400).json({
-          error: 'intervalHours must be between 0.25 and 168.',
-        });
-      }
-
       const next = updateConfig({
         enabled: Boolean(body.enabled),
         channelId: String(body.channelId || ''),
         symbol: String(body.symbol || 'FTGFF').trim().toUpperCase(),
         companyName: String(body.companyName || DEFAULT_CONFIG.companyName).trim(),
         exchange: String(body.exchange || DEFAULT_CONFIG.exchange).trim(),
-        intervalHours,
         embedColor: String(body.embedColor || DEFAULT_CONFIG.embedColor),
         includeChart: body.includeChart !== false,
         includeChartHint: Boolean(body.includeChartHint),

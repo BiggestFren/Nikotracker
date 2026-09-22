@@ -1,139 +1,81 @@
 const { EmbedBuilder } = require('discord.js');
 const { buildFieldRows, formatNumber } = require('./stock');
 
-const COLOR_UP = 0x22c55e;
-const COLOR_DOWN = 0xef4444;
-
-const ANSI = {
-  reset: '\u001b[0m',
-  dim: '\u001b[2;37m',
-  green: '\u001b[1;32m',
-  red: '\u001b[1;31m',
-  white: '\u001b[1;37m',
-};
-
-function signed(value, digits = 2) {
-  if (value == null || Number.isNaN(Number(value))) return '—';
-  const n = Number(value);
-  const sign = n > 0 ? '+' : '';
-  return `${sign}${formatNumber(n, digits)}`;
+function signed(value) {
+  if (value == null || !Number.isFinite(Number(value))) return '—';
+  return `${value > 0 ? '+' : ''}${formatNumber(value)}`;
 }
 
-function ansiPeriodValue(period, { firstReport = false } = {}) {
-  if (firstReport) {
-    return `${ANSI.dim}First report — baseline set${ANSI.reset}`;
-  }
-  if (!period || period.change == null) {
-    return `${ANSI.dim}—${ANSI.reset}`;
-  }
-  const up = period.change >= 0;
-  const color = up ? ANSI.green : ANSI.red;
-  const arrow = up ? '▲' : '▼';
-  const pct =
-    period.changePercent == null ? '' : ` (${signed(period.changePercent)}%)`;
-  return `${color}${arrow} ${signed(period.change)}${pct}${ANSI.reset}`;
+function movement(period) {
+  if (period?.change == null) return '—';
+  const arrow = period.change > 0 ? '▲' : period.change < 0 ? '▼' : '•';
+  const percent = period.changePercent == null ? '' : ` (${signed(period.changePercent)}%)`;
+  return `${arrow} ${signed(period.change)}${percent}`;
 }
 
-function padLabel(label, width = 18) {
-  // Spaces in ANSI blocks are monospace — pad with regular spaces
-  return label.padEnd(width, ' ');
-}
-
-function buildPerformanceBlock(fields, periods) {
+function compactFields(quote, fields) {
   const rows = [];
-
-  const push = (enabled, label, period, opts) => {
-    if (enabled === false) return;
-    rows.push(
-      `${ANSI.dim}${padLabel(label)}${ANSI.reset}${ansiPeriodValue(period, opts)}`
-    );
-  };
-
-  push(
-    fields.changeSinceLast,
-    'Since last report',
-    periods.sinceLastReport,
-    { firstReport: periods.sinceLastReport?.baseline == null }
-  );
-  push(fields.change24h, 'Last 24 hours', periods.day);
-  push(fields.changeMonth, 'Last month', periods.month);
-  push(fields.changeYear, 'Last year', periods.year);
-
-  if (!rows.length) return null;
-  return ['**Performance**', '```ansi', ...rows, '```'].join('\n');
+  if (fields.open) rows.push({ name: 'Open', value: `${formatNumber(quote.open)} ${quote.currency}`, inline: true });
+  if (fields.high && fields.low) {
+    rows.push({ name: 'Day range', value: `${formatNumber(quote.low)}–${formatNumber(quote.high)} ${quote.currency}`, inline: true });
+  } else {
+    if (fields.high) rows.push({ name: 'High', value: `${formatNumber(quote.high)} ${quote.currency}`, inline: true });
+    if (fields.low) rows.push({ name: 'Low', value: `${formatNumber(quote.low)} ${quote.currency}`, inline: true });
+  }
+  if (fields.volume) rows.push({ name: 'Volume', value: formatNumber(quote.volume, 0), inline: true });
+  return rows;
 }
 
-function buildStockEmbed(quote, config, { chartAttachmentName = null } = {}) {
+function buildStockEmbed(quote, config, { chartAttachmentName = null, kind = 'regular', manualClosed = false, manual = false } = {}) {
   const fields = config.fields || {};
-  const periods = quote.periods || {};
-  const titleName = config.companyName || quote.name;
-  const exchange = config.exchange || quote.exchange;
   const symbol = config.symbol || quote.symbol;
-
-  const primary =
-    periods.sinceLastReport?.change != null
-      ? periods.sinceLastReport
-      : periods.day;
-  const up = (primary?.change ?? quote.change ?? 0) >= 0;
-  const color = up ? COLOR_UP : COLOR_DOWN;
-
+  const rich = kind === 'close' || manual || manualClosed;
+  const today = quote.periods?.day?.change != null ? quote.periods.day : quote;
+  const color = today.change > 0 ? 0x22c55e : today.change < 0 ? 0xef4444 : config.embedColor || 0x2b6cb0;
   const lines = [];
-  if (fields.price !== false) {
-    lines.push(`# ${formatNumber(quote.price)} ${quote.currency}`);
+
+  if (kind === 'close') lines.push('**FINAL SESSION REPORT · LAST REPORTED PRICE**');
+  else if (manualClosed) lines.push('**MARKET CLOSED · MANUAL SNAPSHOT OF LAST REPORTED PRICE**');
+  if (fields.price !== false) lines.push(`# ${formatNumber(quote.price)} ${quote.currency}`);
+  if (fields.change24h !== false && today.change != null) {
+    lines.push(`**${movement(today)} ${manualClosed ? 'last session' : 'today'}**`);
+  }
+  if (fields.changeSinceLast !== false) {
+    const since = quote.periods?.sinceLastReport;
+    lines.push(`Since last post: ${since?.baseline == null ? 'First report' : movement(since)}`);
   }
 
-  if (quote.marketState === 'POST' && quote.postMarketPrice != null) {
-    const ahUp = (quote.postMarketChange ?? 0) >= 0;
-    lines.push(
-      `After hours **${formatNumber(quote.postMarketPrice)}** · ${ahUp ? '▲' : '▼'} ${signed(quote.postMarketChange)} (${signed(quote.postMarketChangePercent)}%)`
-    );
+  if (rich) {
+    if ((kind === 'close' || manualClosed) && quote.regularMarketTime) {
+      lines.push(`Last regular trade: <t:${Math.floor(new Date(quote.regularMarketTime).getTime() / 1000)}:F>`);
+    }
+    const longer = [
+      ['1 month', fields.changeMonth, quote.periods?.month],
+      ['1 year', fields.changeYear, quote.periods?.year],
+    ].filter(([, enabled, period]) => enabled !== false && period?.change != null);
+    if (longer.length) {
+      lines.push('', '**Longer-term performance**');
+      for (const [label, , period] of longer) lines.push(`${label}: ${movement(period)}`);
+    }
   }
 
-  const perf = buildPerformanceBlock(fields, periods);
-  if (perf) {
-    lines.push('');
-    lines.push(perf);
-  }
-
+  const timestamp = (kind === 'close' || manualClosed) && quote.regularMarketTime
+    ? quote.regularMarketTime : quote.fetchedAt;
   const embed = new EmbedBuilder()
     .setColor(color)
-    .setAuthor({ name: titleName })
-    .setTitle(`${exchange}:${symbol}`)
+    .setAuthor({ name: config.companyName || quote.name })
+    .setTitle(`${symbol} · ${config.exchange || quote.exchange}`)
     .setDescription(lines.join('\n') || 'No fields enabled.')
-    .setTimestamp(new Date(quote.fetchedAt))
-    .setFooter({
-      text:
-        `${quote.marketState} · every ${config.intervalHours}h` +
-        (config.lastReportAt
-          ? ` · last post ${new Date(config.lastReportAt).toLocaleString()}`
-          : ' · first report'),
-    });
-
-  if (chartAttachmentName) {
-    embed.setImage(`attachment://${chartAttachmentName}`);
-  }
-
-  const metricFields = buildFieldRows(quote, fields);
-  if (metricFields.length) {
-    embed.addFields(
-      { name: 'Snapshot', value: '\u200b', inline: false },
-      ...metricFields
-    );
-  }
+    .setTimestamp(new Date(timestamp))
+    .setFooter({ text: `${kind === 'close' ? 'Session complete' : manualClosed ? 'Market closed' : quote.marketState === 'REGULAR' ? 'Market open' : quote.marketState} · ${quote.quoteSourceName || 'Yahoo Finance'}` });
 
   if (config.includeChartHint) {
-    embed.addFields({
-      name: 'More',
-      value: `[Yahoo Finance](https://finance.yahoo.com/quote/${encodeURIComponent(symbol)})`,
-      inline: false,
-    });
+    embed.setURL(`https://finance.yahoo.com/quote/${encodeURIComponent(symbol)}`);
   }
-
+  if (chartAttachmentName) embed.setImage(`attachment://${chartAttachmentName}`);
+  const metrics = rich ? buildFieldRows(quote, fields) : compactFields(quote, fields);
+  if (metrics.length) embed.addFields(metrics);
   return embed;
 }
 
-module.exports = {
-  buildStockEmbed,
-  COLOR_UP,
-  COLOR_DOWN,
-};
+module.exports = { buildStockEmbed };

@@ -96,7 +96,6 @@ function fillForm(config) {
   document.getElementById('enabled').checked = Boolean(config.enabled);
   document.getElementById('includeChart').checked = config.includeChart !== false;
   document.getElementById('includeChartHint').checked = Boolean(config.includeChartHint);
-  document.getElementById('intervalHours').value = config.intervalHours ?? 1;
   document.getElementById('symbol').value = config.symbol || 'FTGFF';
   document.getElementById('companyName').value =
     config.companyName || 'Firan Technology Group Corp';
@@ -171,8 +170,10 @@ function renderScheduler(status, bot) {
   const rows = [
     ['Bot', bot.ready ? bot.tag || 'Online' : 'Offline'],
     ['Auto reports', status.enabled ? 'On' : 'Off'],
-    ['Cadence', `Every ${status.intervalHours}h`],
-    ['Interval', status.intervalMs ? `${Math.round(status.intervalMs / 60000)} min` : '—'],
+    ['Market', status.marketStatus === 'open' ? 'Open' : 'Closed'],
+    ['Schedule', '4 reports per trading day + close'],
+    ['Next post', status.nextPostAt ? new Date(status.nextPostAt).toLocaleString() :
+      status.enabled ? 'Choose a channel' : 'Disabled'],
     ['Last report', status.lastReportAt ? new Date(status.lastReportAt).toLocaleString() : 'Never'],
     ['Last tick', status.lastTickAt ? new Date(status.lastTickAt).toLocaleString() : '—'],
     ['Last error', status.lastError || 'None'],
@@ -245,7 +246,6 @@ document.getElementById('settingsForm').addEventListener('submit', async (e) => 
       includeChart: document.getElementById('includeChart').checked,
       includeChartHint: document.getElementById('includeChartHint').checked,
       channelId: document.getElementById('channelId').value,
-      intervalHours: Number(document.getElementById('intervalHours').value),
       symbol: document.getElementById('symbol').value.trim(),
       companyName: document.getElementById('companyName').value.trim(),
       exchange: document.getElementById('exchange').value.trim(),
@@ -269,7 +269,8 @@ document.getElementById('reportNowBtn').addEventListener('click', async () => {
   const btn = document.getElementById('reportNowBtn');
   btn.disabled = true;
   try {
-    await api('/api/report-now', { method: 'POST', body: '{}' });
+    const result = await api('/api/report-now', { method: 'POST', body: '{}' });
+    if (result.skipped) throw new Error(result.reason);
     showToast('Report sent to the selected channel.');
     await refreshAll();
   } catch (err) {

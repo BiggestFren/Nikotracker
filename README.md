@@ -2,6 +2,10 @@
 
 Discord bot + web panel that posts scheduled **FTGFF** (Firan Technology Group Corp) stock embeds — with period performance and a price chart.
 
+Automatic posts follow U.S. OTC regular trading hours (9:30 a.m.–4:00 p.m. Eastern, or 1:00 p.m. on early-close days). Each trading day has four reports: at the open and at 25%, 50%, and 75% of the session. About 15 minutes after the close, the bot posts a final report with the last reported trade time, followed by a separate signoff naming the next opening. Holidays and daylight saving time are handled automatically. **Send report now** still works after hours and labels the quote accordingly. The schedule is intended for FTGFF and other U.S. OTC shares; changing to another exchange does not change the trading calendar.
+
+Intraday posts are compact: price, today's change, change since the last post, open, day range, and volume. The closing report and manual reports include the selected detailed metrics and, when enabled, a six-month chart. The ticker heading links to Yahoo Finance when that option is enabled.
+
 ## Quick start (local)
 
 ```bash
@@ -46,7 +50,7 @@ Portainer will clone the repo, build the image from the `Dockerfile`, and start 
 
 `http://YOUR_SERVER_IP:3847` (or whatever `HOST_PORT` you set)
 
-Use **Invite bot** in the sidebar, pick a channel, set the interval, save.
+Use **Invite bot** in the sidebar, pick a channel, and save.
 
 ### 3. Redeploy after updates
 

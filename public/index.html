@@ -29,7 +29,7 @@
     <section class="panel">
       <div class="panel-head">
         <h2>Report settings</h2>
-        <p>Choose the channel, cadence, and which metrics appear in the Discord embed.</p>
+        <p>Choose the channel and metrics. Reports follow the U.S. OTC regular trading session.</p>
       </div>
 
       <form id="settingsForm">
@@ -42,20 +42,18 @@
             <small>Updates are posted only to this channel.</small>
           </label>
 
-          <label class="field">
-            <span>Report every</span>
-            <div class="inline">
-              <input id="intervalHours" name="intervalHours" type="number" min="0.25" max="168" step="0.25" value="1" />
-              <span class="suffix">hours</span>
-            </div>
-            <small>Use 0.25 for every 15 minutes, 1 for hourly, 24 for daily.</small>
-          </label>
+          <div class="field">
+            <span>Posting schedule</span>
+            <strong>Four reports per trading day</strong>
+            <small>At market open, then three evenly spaced updates. Final report and signoff about 15 minutes after close.</small>
+          </div>
         </div>
 
         <div class="grid two">
           <label class="field">
             <span>Ticker symbol</span>
             <input id="symbol" name="symbol" type="text" value="FTGFF" />
+            <small>The automatic schedule uses U.S. OTC hours for any ticker entered here.</small>
           </label>
           <label class="field">
             <span>Company name</span>
@@ -77,20 +75,21 @@
         <div class="toggles">
           <label class="switch">
             <input type="checkbox" id="enabled" checked />
-            <span>Enable automatic reports</span>
+            <span>Enable automatic reports and closing messages</span>
           </label>
           <label class="switch">
             <input type="checkbox" id="includeChart" checked />
-            <span>Attach price chart image</span>
+            <span>Attach chart to closing and manual reports</span>
           </label>
           <label class="switch">
             <input type="checkbox" id="includeChartHint" checked />
-            <span>Include Yahoo Finance link</span>
+            <span>Link ticker heading to Yahoo Finance</span>
           </label>
         </div>
 
         <fieldset class="metrics">
           <legend>Embed fields</legend>
+          <p class="muted">Intraday posts show the essentials. Closing and manual reports show all selected details.</p>
           <div class="metric-grid" id="fieldToggles"></div>
         </fieldset>
 
@@ -100,6 +99,7 @@
           <button type="button" class="btn ghost" id="refreshBtn">Refresh</button>
         </div>
         <p class="toast" id="toast" hidden></p>
+        <p class="muted">Manual reports remain available after hours and show the last reported quote.</p>
       </form>
     </section>
 

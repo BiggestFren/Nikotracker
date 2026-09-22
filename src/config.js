@@ -9,7 +9,6 @@ const DEFAULT_CONFIG = {
   symbol: 'FTGFF',
   companyName: 'Firan Technology Group Corp',
   exchange: 'OTCMKTS',
-  intervalHours: 1,
   embedColor: '#2b6cb0',
   includeChart: true,
   includeChartHint: true,
@@ -32,6 +31,8 @@ const DEFAULT_CONFIG = {
   },
   lastReportAt: null,
   lastReportPrice: null,
+  scheduledSession: null,
+  completedSlots: [],
 };
 
 function ensureDataDir() {
@@ -49,11 +50,13 @@ function loadConfig() {
   }
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-    return {
+    const config = {
       ...DEFAULT_CONFIG,
       ...raw,
       fields: { ...DEFAULT_CONFIG.fields, ...(raw.fields || {}) },
     };
+    delete config.intervalHours;
+    return config;
   } catch {
     return { ...DEFAULT_CONFIG, fields: { ...DEFAULT_CONFIG.fields } };
   }
@@ -66,6 +69,7 @@ function saveConfig(config) {
     ...config,
     fields: { ...DEFAULT_CONFIG.fields, ...(config.fields || {}) },
   };
+  delete next.intervalHours;
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(next, null, 2), 'utf8');
   return next;
 }

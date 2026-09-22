@@ -9,6 +9,7 @@ const { loadConfig, updateConfig } = require('./config');
 const { fetchQuote } = require('./stock');
 const { buildStockEmbed } = require('./embed');
 const { renderPriceChart } = require('./chart');
+const { marketStatus } = require('./market');
 
 const BOT_PERMISSIONS =
   PermissionFlagsBits.ViewChannel |
@@ -17,7 +18,17 @@ const BOT_PERMISSIONS =
   PermissionFlagsBits.AttachFiles;
 
 let client = null;
-let reportInFlight = false;
+let postInFlight = false;
+
+function completed(config, sessionDate, slot) {
+  return config.scheduledSession === sessionDate && config.completedSlots?.includes(slot);
+}
+
+function markCompleted(sessionDate, slot) {
+  const current = loadConfig();
+  const slots = current.scheduledSession === sessionDate ? current.completedSlots || [] : [];
+  updateConfig({ scheduledSession: sessionDate, completedSlots: [...new Set([...slots, slot])] });
+}
 
 function getClient() {
   return client;
@@ -80,7 +91,7 @@ async function listTextChannels() {
   return channels;
 }
 
-async function sendStockReport({ force = false } = {}) {
+async function sendStockReport({ force = false, kind = 'regular', sessionDate = null, slot = null } = {}) {
   if (!client?.isReady()) {
     throw new Error('Bot is not connected to Discord yet.');
   }
@@ -91,15 +102,23 @@ async function sendStockReport({ force = false } = {}) {
     return { skipped: true, reason: 'Reporting is disabled.' };
   }
 
+  if (slot && completed(config, sessionDate, slot)) {
+    return { skipped: true, reason: 'This session post was already sent.' };
+  }
+
+  if (!force && kind === 'regular' && marketStatus() !== 'open') {
+    return { skipped: true, reason: 'Market is closed.' };
+  }
+
   if (!config.channelId) {
     throw new Error('No Discord channel selected. Pick one in the web panel.');
   }
 
-  if (reportInFlight) {
+  if (postInFlight) {
     return { skipped: true, reason: 'A report is already being sent.' };
   }
 
-  reportInFlight = true;
+  postInFlight = true;
   try {
     const channel = await client.channels.fetch(config.channelId);
     if (!channel || !channel.isTextBased()) {
@@ -109,6 +128,10 @@ async function sendStockReport({ force = false } = {}) {
     const quote = await fetchQuote(config.symbol || 'FTGFF', {
       lastReportPrice: config.lastReportPrice,
     });
+
+    if (!force && kind === 'regular' && quote.marketState !== 'REGULAR') {
+      return { skipped: true, reason: `Yahoo reports market state ${quote.marketState}.` };
+    }
 
     const periods = quote.periods || {};
     const primary =
@@ -127,7 +150,7 @@ async function sendStockReport({ force = false } = {}) {
     const files = [];
     let chartName = null;
 
-    if (config.includeChart !== false && quote.history?.length) {
+    if (config.includeChart !== false && (kind === 'close' || force) && quote.history?.length) {
       try {
         const png = await renderPriceChart({
           symbol: config.symbol || quote.symbol,
@@ -143,6 +166,9 @@ async function sendStockReport({ force = false } = {}) {
 
     const embed = buildStockEmbed(quote, config, {
       chartAttachmentName: chartName,
+      kind,
+      manualClosed: force && marketStatus() === 'closed',
+      manual: force,
     });
 
     const message = await channel.send({
@@ -150,9 +176,15 @@ async function sendStockReport({ force = false } = {}) {
       files: files.length ? files : undefined,
     });
 
+    const latest = loadConfig();
+    const slots = latest.scheduledSession === sessionDate ? latest.completedSlots || [] : [];
     updateConfig({
       lastReportAt: new Date().toISOString(),
       lastReportPrice: quote.price,
+      ...(slot ? {
+        scheduledSession: sessionDate,
+        completedSlots: [...new Set([...slots, slot])],
+      } : {}),
     });
 
     return {
@@ -163,7 +195,36 @@ async function sendStockReport({ force = false } = {}) {
       chartAttached: Boolean(chartName),
     };
   } finally {
-    reportInFlight = false;
+    postInFlight = false;
+  }
+}
+
+async function sendMarketCloseMessage({ sessionDate, nextOpenAt }) {
+  if (!client?.isReady()) throw new Error('Bot is not connected to Discord yet.');
+  const config = loadConfig();
+  if (!config.enabled) return { skipped: true, reason: 'Reporting is disabled.' };
+  if (completed(config, sessionDate, 'close-message')) {
+    return { skipped: true, reason: 'Closing message was already sent.' };
+  }
+  if (!config.channelId) throw new Error('No Discord channel selected. Pick one in the web panel.');
+  if (postInFlight) return { skipped: true, reason: 'A post is already being sent.' };
+
+  postInFlight = true;
+  try {
+    const channel = await client.channels.fetch(config.channelId);
+    if (!channel || !channel.isTextBased()) {
+      throw new Error('Selected channel is missing or not a text channel.');
+    }
+    const reopen = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'long', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    }).format(nextOpenAt);
+    const message = await channel.send(`Market is closed until **${reopen}**. See you then!`);
+    markCompleted(sessionDate, 'close-message');
+    return { ok: true, messageId: message.id, channelId: channel.id };
+  } finally {
+    postInFlight = false;
   }
 }
 
@@ -182,6 +243,7 @@ module.exports = {
   getClient,
   listTextChannels,
   sendStockReport,
+  sendMarketCloseMessage,
   getBotStatus,
   getInviteUrl,
   BOT_PERMISSIONS,
