@@ -94,12 +94,13 @@ test('intraday embed keeps essentials while close retains selected details', () 
       week52High: true, changeMonth: true },
   };
   const intraday = buildStockEmbed(quote, config).toJSON();
-  assert.match(intraday.description, /# 15\.49 USD\n\*\*▲ \+0\.31 \(\+2\.05%\) today\*\*/);
+  assert.match(intraday.description, /# 15\.49 USD\n```ansi\nToday\s+\u001b\[1;32m▲ \+0\.31 \(\+2\.05%\)\u001b\[0m/);
+  assert.match(intraday.description, /Since last post\s+\u001b\[2;37m• 0\.00 \(0\.00%\)\u001b\[0m/);
   assert.deepEqual(intraday.fields.map(({ name }) => name), ['Open', 'Day range', 'Volume']);
-  assert.doesNotMatch(intraday.description, /ansi|Longer-term performance/);
+  assert.doesNotMatch(intraday.description, /Longer-term performance/);
   assert.equal(intraday.url, 'https://finance.yahoo.com/quote/FTGFF');
   const close = buildStockEmbed(quote, config, { kind: 'close', chartAttachmentName: 'chart.png' }).toJSON();
-  assert.match(close.description, /1 month: ▼ -1\.01 \(-6\.11%\)/);
+  assert.match(close.description, /1 month\s+\u001b\[1;31m▼ -1\.01 \(-6\.11%\)\u001b\[0m/);
   assert.ok(close.fields.some(({ name }) => name === 'Mkt Cap'));
   assert.equal(close.image.url, 'attachment://chart.png');
 });

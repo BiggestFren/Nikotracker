@@ -13,6 +13,15 @@ function movement(period) {
   return `${arrow} ${signed(period.change)}${percent}`;
 }
 
+function coloredMovement(period) {
+  const color = period?.change > 0 ? '\u001b[1;32m' : period?.change < 0 ? '\u001b[1;31m' : '\u001b[2;37m';
+  return `${color}${movement(period)}\u001b[0m`;
+}
+
+function performanceBlock(rows) {
+  return ['```ansi', ...rows.map(([label, value]) => `${label.padEnd(16)}${value}`), '```'].join('\n');
+}
+
 function compactFields(quote, fields) {
   const rows = [];
   if (fields.open) rows.push({ name: 'Open', value: `${formatNumber(quote.open)} ${quote.currency}`, inline: true });
@@ -37,13 +46,14 @@ function buildStockEmbed(quote, config, { chartAttachmentName = null, kind = 're
   if (kind === 'close') lines.push('**FINAL SESSION REPORT · LAST REPORTED PRICE**');
   else if (manualClosed) lines.push('**MARKET CLOSED · MANUAL SNAPSHOT OF LAST REPORTED PRICE**');
   if (fields.price !== false) lines.push(`# ${formatNumber(quote.price)} ${quote.currency}`);
-  if (fields.change24h !== false && today.change != null) {
-    lines.push(`**${movement(today)} ${manualClosed ? 'last session' : 'today'}**`);
-  }
+  const performance = [];
+  if (fields.change24h !== false && today.change != null)
+    performance.push([manualClosed ? 'Last session' : 'Today', coloredMovement(today)]);
   if (fields.changeSinceLast !== false) {
     const since = quote.periods?.sinceLastReport;
-    lines.push(`Since last post: ${since?.baseline == null ? 'First report' : movement(since)}`);
+    performance.push(['Since last post', since?.baseline == null ? 'First report' : coloredMovement(since)]);
   }
+  if (performance.length) lines.push(performanceBlock(performance));
 
   if (rich) {
     if ((kind === 'close' || manualClosed) && quote.regularMarketTime) {
@@ -55,7 +65,7 @@ function buildStockEmbed(quote, config, { chartAttachmentName = null, kind = 're
     ].filter(([, enabled, period]) => enabled !== false && period?.change != null);
     if (longer.length) {
       lines.push('', '**Longer-term performance**');
-      for (const [label, , period] of longer) lines.push(`${label}: ${movement(period)}`);
+      lines.push(performanceBlock(longer.map(([label, , period]) => [label, coloredMovement(period)])));
     }
   }
 
